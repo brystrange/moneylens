@@ -9,7 +9,17 @@ import {
   collection, onSnapshot, addDoc, deleteDoc, doc,
   updateDoc, setDoc, serverTimestamp, query, orderBy,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
+import {
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+} from 'firebase/auth';
+
+const googleProvider = new GoogleAuthProvider();
 
 // ── Category color map ────────────────────────────────────────
 const CAT_BG = {
@@ -22,6 +32,24 @@ const CAT_FG = {
   Shopping: 'var(--cat-shopping)', Bills: 'var(--cat-bills)',
   Health: 'var(--cat-health)',
 };
+
+// ── Dynamic colors for custom categories ─────────────────────
+const CUSTOM_CAT_PALETTE = [
+  { fg: '#E74C3C', bg: 'rgba(231,76,60,.12)' },   // Red
+  { fg: '#8E44AD', bg: 'rgba(142,68,173,.12)' },   // Purple
+  { fg: '#2980B9', bg: 'rgba(41,128,185,.12)' },   // Blue
+  { fg: '#16A085', bg: 'rgba(22,160,133,.12)' },   // Teal
+  { fg: '#D35400', bg: 'rgba(211,84,0,.12)' },     // Burnt Orange
+  { fg: '#C0392B', bg: 'rgba(192,57,43,.12)' },    // Dark Red
+  { fg: '#2ECC71', bg: 'rgba(46,204,113,.12)' },   // Green
+  { fg: '#F39C12', bg: 'rgba(243,156,18,.12)' },   // Amber
+  { fg: '#1ABC9C', bg: 'rgba(26,188,156,.12)' },   // Mint
+  { fg: '#6C5CE7', bg: 'rgba(108,92,231,.12)' },   // Indigo
+];
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return Math.abs(h); }
+function getCustomCatColor(name) { return CUSTOM_CAT_PALETTE[hashStr(name) % CUSTOM_CAT_PALETTE.length]; }
+function getCatFg(cat) { return CAT_FG[cat] || getCustomCatColor(cat).fg; }
+function getCatBg(cat) { return CAT_BG[cat] || getCustomCatColor(cat).bg; }
 
 
 // ─────────────────────────────────────────────────────────────
@@ -121,6 +149,7 @@ function MiniDonut({ expenses }) {
     Food: '#FF6B35', Transport: '#3498DB', Shopping: '#9B59B6',
     Bills: '#E74C3C', Health: '#2ECC71',
   };
+  const getDonutColor = (cat) => CAT_COLORS_DONUT[cat] || getCustomCatColor(cat).fg;
 
   return (
     <div style={{ width: '100%' }}>
@@ -132,7 +161,7 @@ function MiniDonut({ expenses }) {
             const frac = v / total;
             const dash = frac * C;
             const dashOffset = -(offset * C);
-            const color = CAT_COLORS_DONUT[cat] || '#95A5A6';
+            const color = getDonutColor(cat);
             const seg = (
               <circle key={i}
                 cx={CX} cy={CY} r={R} fill="none"
@@ -150,7 +179,7 @@ function MiniDonut({ expenses }) {
         {/* Legend dots — 2 column grid */}
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px' }}>
           {entries.slice(0, 5).map(([cat, v]) => {
-            const color = CAT_COLORS_DONUT[cat] || '#95A5A6';
+            const color = getDonutColor(cat);
             return (
               <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
@@ -164,7 +193,7 @@ function MiniDonut({ expenses }) {
       {/* Progress bars — full width, one per category */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {entries.slice(0, 5).map(([cat, v]) => {
-          const color = CAT_COLORS_DONUT[cat] || '#95A5A6';
+          const color = getDonutColor(cat);
           const pct = Math.round((v / total) * 100);
           return (
             <div key={cat}>
@@ -187,15 +216,9 @@ function MiniDonut({ expenses }) {
 //  MODAL COMPONENT
 // ─────────────────────────────────────────────────────────────
 function Modal({ open, title, onClose, children, overlayClass }) {
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
   return (
-    <div className={`modal-overlay${open ? ' open' : ''}${overlayClass ? ' ' + overlayClass : ''}`} onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className={`modal-overlay${open ? ' open' : ''}${overlayClass ? ' ' + overlayClass : ''}`}>
+      <div className="modal">
         <div className="modal-hd">
           <span className="modal-title">{title}</span>
           <button className="btn btn-icon btn-ghost" onClick={onClose}><CloseIcon /></button>
@@ -324,7 +347,7 @@ function Dashboard({ expenses, recurring, goals, budgets, onNav, onAddExpense, f
         <div style={{ padding: '0 22px' }}>
           {recent.map((e, i) => (
             <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: i < recent.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div className="cat-ico" style={{ background: CAT_BG[e.cat] || "var(--accent-bg)", color: CAT_FG[e.cat] || "var(--accent)", borderColor: CAT_FG[e.cat] || "var(--accent)" }}><CatIcon name={e.cat} size={22} /></div>
+              <div className="cat-ico" style={{ background: getCatBg(e.cat), color: getCatFg(e.cat), borderColor: getCatFg(e.cat) }}><CatIcon name={e.cat} size={22} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</div>
                 <div style={{ fontSize: 11, color: 'var(--ink3)', marginTop: 2, fontFamily: "'Nunito', sans-serif" }}>{e.cat} · {e.date}</div>
@@ -404,7 +427,7 @@ function Expenses({ expenses, onDelete, fmt = peso }) {
               <tr key={e.id}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="cat-ico sm" style={{ background: CAT_BG[e.cat] || "var(--accent-bg)", color: CAT_FG[e.cat] || "var(--accent)", borderColor: CAT_FG[e.cat] || "var(--accent)" }}><CatIcon name={e.cat} size={20} /></div>
+                    <div className="cat-ico sm" style={{ background: getCatBg(e.cat), color: getCatFg(e.cat), borderColor: getCatFg(e.cat) }}><CatIcon name={e.cat} size={20} /></div>
                     <div>
                       <div style={{ fontWeight: 500 }}>{e.name}</div>
                       {e.note && <div style={{ fontSize: 11, color: 'var(--ink3)' }}>{e.note}</div>}
@@ -412,7 +435,7 @@ function Expenses({ expenses, onDelete, fmt = peso }) {
                   </div>
                 </td>
                 <td>
-                  <span className="cat-pill" style={{ background: CAT_BG[e.cat] || "var(--surface2)", color: CAT_FG[e.cat] || "var(--ink2)", borderColor: CAT_FG[e.cat] || "var(--border)" }}><CatIcon name={e.cat} size={16} />&nbsp;{e.cat}</span>
+                  <span className="cat-pill" style={{ background: getCatBg(e.cat), color: getCatFg(e.cat), borderColor: getCatFg(e.cat) }}><CatIcon name={e.cat} size={16} />&nbsp;{e.cat}</span>
                 </td>
                 <td className="hide-sm" style={{ fontSize: 12, color: 'var(--ink3)', fontFamily: "'Nunito', sans-serif" }}>{e.date}</td>
                 <td style={{ textAlign: 'right', fontFamily: "'Nunito', sans-serif", fontWeight: 500 }}>{fmt(e.amount)}</td>
@@ -483,7 +506,7 @@ function Budgets({ expenses, budgets, onEditBudgets, fmt = peso }) {
               <div key={cat} style={{ padding: '18px 0', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="cat-ico sm" style={{ background: CAT_BG[cat] || "var(--accent-bg)", color: CAT_FG[cat] || "var(--accent)", borderColor: CAT_FG[cat] || "var(--accent)" }}><CatIcon name={cat} size={20} /></div>
+                    <div className="cat-ico sm" style={{ background: getCatBg(cat), color: getCatFg(cat), borderColor: getCatFg(cat) }}><CatIcon name={cat} size={20} /></div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{cat}</span>
                     {over && <span className="badge br">Over</span>}
                     {warn && <span className="badge ba">Warning</span>}
@@ -566,7 +589,7 @@ function Recurring({ recurring, onToggle, onDelete, onAdd, fmt = peso }) {
               borderBottom: '1.5px solid var(--border)',
               opacity: r.active ? 1 : 0.45,
             }}>
-              <div className="cat-ico" style={{ background: CAT_BG[r.cat] || "var(--accent-bg)", color: CAT_FG[r.cat] || "var(--accent)", borderColor: CAT_FG[r.cat] || "var(--accent)" }}><CatIcon name={r.cat} size={22} /></div>
+              <div className="cat-ico" style={{ background: getCatBg(r.cat), color: getCatFg(r.cat), borderColor: getCatFg(r.cat) }}><CatIcon name={r.cat} size={22} /></div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--ink)' }}>{r.name}</div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink3)', marginTop: 4 }}>{`Every month · Day ${r.day}${r.due ? ` · Due ${r.due}` : ''}`}</div>
@@ -700,7 +723,7 @@ function Insights({ expenses, budgets, goals, fmt = peso }) {
           <div className="card-body">
             {over.map((c, i) => (
               <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < over.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div className="cat-ico sm" style={{ background: CAT_BG[c] || "var(--accent-bg)", color: CAT_FG[c] || "var(--accent)", borderColor: CAT_FG[c] || "var(--accent)" }}><CatIcon name={c} size={20} /></div>
+                <div className="cat-ico sm" style={{ background: getCatBg(c), color: getCatFg(c), borderColor: getCatFg(c) }}><CatIcon name={c} size={20} /></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{c}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink3)' }}>Limit: {fmt(budgets[c])}</div>
@@ -963,9 +986,127 @@ const NAV = [
 ];
 
 // ─────────────────────────────────────────────────────────────
+//  LOGIN PAGE
+// ─────────────────────────────────────────────────────────────
+function LoginPage({ onAuth }) {
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      if (mode === 'signup') {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      const msg = err.code?.replace('auth/', '').replace(/-/g, ' ') || err.message;
+      setError(msg.charAt(0).toUpperCase() + msg.slice(1));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        const msg = err.code?.replace('auth/', '').replace(/-/g, ' ') || err.message;
+        setError(msg.charAt(0).toUpperCase() + msg.slice(1));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            <div className="brand-logo" style={{ width: 44, height: 44, borderRadius: 14 }}>
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+                <path d="M2 12l3-5.5 3 3 3-4.5 3 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="13.5" cy="3.5" r="1.5" fill="rgba(255,255,255,.5)" />
+              </svg>
+            </div>
+            <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--ink)', letterSpacing: '-.5px' }}>MoneyLens</span>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink3)' }}>Track every peso. Own every decision.</div>
+        </div>
+
+        {/* Error */}
+        {error && <div className="auth-error"><AlertIcon size={14} /> {error}</div>}
+
+        {/* Email form */}
+        <form onSubmit={handleSubmit}>
+          <Field label="Email">
+            <input
+              className="finput" type="email" placeholder="you@email.com"
+              value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email"
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              className="finput" type="password" placeholder="••••••••"
+              value={password} onChange={e => setPassword(e.target.value)} required
+              minLength={6} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            />
+          </Field>
+          <button className="btn btn-accent" type="submit" disabled={busy}
+            style={{ width: '100%', justifyContent: 'center', padding: '12px 18px' }}>
+            {busy ? '...' : mode === 'signup' ? 'Create Account' : 'Sign In'}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div className="auth-divider"><span>or</span></div>
+
+        {/* Google */}
+        <button className="google-btn" onClick={handleGoogle} disabled={busy} type="button">
+          <svg width="18" height="18" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.34 2.44 10.50l8.09-5.91z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        {/* Toggle */}
+        <div className="auth-toggle">
+          {mode === 'signin' ? (
+            <>Don't have an account? <button type="button" onClick={() => { setMode('signup'); setError(''); }}>Sign Up</button></>
+          ) : (
+            <>Already have an account? <button type="button" onClick={() => { setMode('signin'); setError(''); }}>Sign In</button></>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  ROOT APP
 // ─────────────────────────────────────────────────────────────
 export default function App() {
+  // ── Auth state ─────────────────────────────────────────────
+  const [user, setUser] = useState(undefined); // undefined = loading, null = signed out
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => setUser(u ?? null));
+    return unsub;
+  }, []);
+
   // ── State ──────────────────────────────────────────────────
   const [page, setPage] = useState('dashboard');
   const [expenses, setExpenses] = useState([]);
@@ -982,15 +1123,26 @@ export default function App() {
   const [currency, setCurrency] = useState(() => localStorage.getItem('ml_currency') || 'PHP');
   const toast = useToast();
 
+  const handleSignOut = async () => {
+    try { await firebaseSignOut(auth); } catch (err) { console.error('Sign-out error:', err); }
+  };
+
   const CURRENCY_SYMBOLS = { PHP: '₱', USD: '$', EUR: '€', GBP: '£', JPY: '¥', SGD: 'S$', AUD: 'A$', CAD: 'C$' };
   const currSymbol = CURRENCY_SYMBOLS[currency] || '₱';
   // currSymbol and fmt are passed to all pages/modals
   const fmt = (n) => currSymbol + Math.round(n).toLocaleString('en-PH');
 
-  // ── Firebase listeners ─────────────────────────────────────
+  // ── Per-user Firestore path helpers ─────────────────────────
+  const uid = user?.uid;
+  const userCol = useCallback((name) => collection(db, 'users', uid, name), [uid]);
+  const userDoc = useCallback((col, id) => doc(db, 'users', uid, col, id), [uid]);
+
+  // ── Firebase listeners (per-user) ──────────────────────────
   useEffect(() => {
+    if (!uid) { setLoading(false); return; }
+    setLoading(true);
     const unsubExpenses = onSnapshot(
-      query(collection(db, 'expenses'), orderBy('createdAt', 'desc')),
+      query(userCol('expenses'), orderBy('createdAt', 'desc')),
       (snap) => {
         setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         setLoading(false);
@@ -998,22 +1150,22 @@ export default function App() {
       (err) => { console.error('Firestore expenses error:', err); setLoading(false); }
     );
     const unsubRecurring = onSnapshot(
-      collection(db, 'recurring'),
+      userCol('recurring'),
       (snap) => setRecurring(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
       (err) => { console.error('Firestore recurring error:', err); setRecurring([]); }
     );
     const unsubGoals = onSnapshot(
-      collection(db, 'goals'),
+      userCol('goals'),
       (snap) => setGoals(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
       (err) => { console.error('Firestore goals error:', err); setGoals([]); }
     );
     const unsubBudgets = onSnapshot(
-      doc(db, 'config', 'budgets'),
+      doc(db, 'users', uid, 'config', 'budgets'),
       (snap) => { if (snap.exists()) setBudgets(snap.data()); },
       () => { }
     );
     return () => { unsubExpenses(); unsubRecurring(); unsubGoals(); unsubBudgets(); };
-  }, []);
+  }, [uid, userCol]);
 
   const openModal = (type, data = null) => { setModal(type); setModalData(data); };
   const closeModal = () => { setModal(null); setModalData(null); };
@@ -1021,12 +1173,11 @@ export default function App() {
   // ── Expense handlers ───────────────────────────────────────
   const addExpense = async (form) => {
     try {
-      await addDoc(collection(db, 'expenses'), { ...form, createdAt: serverTimestamp() });
+      await addDoc(userCol('expenses'), { ...form, createdAt: serverTimestamp() });
       closeModal();
       toast.show('Transaction recorded');
     } catch (err) {
       console.error('addExpense error:', err);
-      // Offline fallback
       setExpenses(prev => [{ id: Date.now().toString(), ...form }, ...prev]);
       closeModal();
       toast.show('Saved locally - check Firestore rules');
@@ -1034,7 +1185,7 @@ export default function App() {
   };
   const deleteExpense = async (id) => {
     try {
-      await deleteDoc(doc(db, 'expenses', id));
+      await deleteDoc(userDoc('expenses', id));
     } catch {
       setExpenses(prev => prev.filter(e => e.id !== id));
     }
@@ -1047,9 +1198,9 @@ export default function App() {
 
   // ── Budget handlers ────────────────────────────────────────
   const saveBudgets = async (newBudgets) => {
-    setBudgets(newBudgets); // update local state immediately
+    setBudgets(newBudgets);
     try {
-      await setDoc(doc(db, 'config', 'budgets'), newBudgets);
+      await setDoc(doc(db, 'users', uid, 'config', 'budgets'), newBudgets);
     } catch {
       // already updated locally above
     }
@@ -1060,7 +1211,7 @@ export default function App() {
   // ── Recurring handlers ─────────────────────────────────────
   const addRecurring = async (form) => {
     try {
-      await addDoc(collection(db, 'recurring'), { ...form, active: true, createdAt: serverTimestamp() });
+      await addDoc(userCol('recurring'), { ...form, active: true, createdAt: serverTimestamp() });
       closeModal();
       toast.show('Recurring bill added');
     } catch {
@@ -1073,14 +1224,14 @@ export default function App() {
     const r = recurring.find(r => r.id === id);
     if (!r) return;
     try {
-      await updateDoc(doc(db, 'recurring', id), { active: !r.active });
+      await updateDoc(userDoc('recurring', id), { active: !r.active });
     } catch {
       setRecurring(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r));
     }
   };
   const deleteRecurring = async (id) => {
     try {
-      await deleteDoc(doc(db, 'recurring', id));
+      await deleteDoc(userDoc('recurring', id));
     } catch {
       setRecurring(prev => prev.filter(r => r.id !== id));
     }
@@ -1094,7 +1245,7 @@ export default function App() {
   // ── Goal handlers ──────────────────────────────────────────
   const addGoal = async (form) => {
     try {
-      await addDoc(collection(db, 'goals'), { ...form, createdAt: serverTimestamp() });
+      await addDoc(userCol('goals'), { ...form, createdAt: serverTimestamp() });
       closeModal();
       toast.show('Goal created');
     } catch {
@@ -1105,7 +1256,7 @@ export default function App() {
   };
   const deleteGoal = async (id) => {
     try {
-      await deleteDoc(doc(db, 'goals', id));
+      await deleteDoc(userDoc('goals', id));
     } catch {
       setGoals(prev => prev.filter(g => g.id !== id));
     }
@@ -1120,7 +1271,7 @@ export default function App() {
     if (!g) return;
     const newSaved = Math.min(g.target, g.saved + amount);
     try {
-      await updateDoc(doc(db, 'goals', id), { saved: newSaved });
+      await updateDoc(userDoc('goals', id), { saved: newSaved });
     } catch {
       setGoals(prev => prev.map(g => g.id === id ? { ...g, saved: newSaved } : g));
     }
@@ -1131,7 +1282,8 @@ export default function App() {
   // ── Date header ────────────────────────────────────────────
   const dateStr = new Date().toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' });
 
-  if (loading) {
+  // ── Auth gate — show login page when not signed in ─────────
+  if (user === undefined || (user && loading)) {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1152,6 +1304,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (!user) {
+    return <LoginPage />;
   }
 
   return (
@@ -1181,6 +1337,10 @@ export default function App() {
           <div className="topbar-right">
             <button className="btn btn-accent btn-sm" onClick={() => openModal('add-expense')}>
               <PlusIcon /> <span className="hide-sm">Add Expense</span>
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={handleSignOut} title="Sign Out" style={{ gap: 5 }}>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M7 17H4a1 1 0 01-1-1V4a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 14l4-4-4-4M8 10h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span className="hide-sm">Sign Out</span>
             </button>
           </div>
         </header>
@@ -1219,8 +1379,13 @@ export default function App() {
           ))}
           <div className="sspacer" />
           <div className="sfoot">
-            <div>All features active</div>
-            <div>MoneyLens v3.0</div>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+              {user.email || 'Signed in'}
+            </div>
+            <button className="btn btn-sm btn-ghost" onClick={handleSignOut} style={{ width: '100%', justifyContent: 'center', fontSize: 11, padding: '6px 10px', gap: 5 }}>
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M7 17H4a1 1 0 01-1-1V4a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 14l4-4-4-4M8 10h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Sign Out
+            </button>
           </div>
         </aside>
 
@@ -1286,7 +1451,7 @@ export default function App() {
           setConfirmDel(null);
         }}
       />
-      <AddCategoryModal open={addCatOpen} onClose={() => setAddCatOpen(false)} currSymbol={currSymbol} onSave={(name, limit) => { setCustomCats(p => [...p, name]); if (limit > 0) saveBudgets({ ...budgets, [name]: limit }); setAddCatOpen(false); toast.show(name + ' category added'); }} />
+      <AddCategoryModal open={addCatOpen} onClose={() => setAddCatOpen(false)} currSymbol={currSymbol} onSave={(name, limit) => { setCustomCats(p => [...p, name]); if (limit > 0) { const nb = { ...budgets, [name]: limit }; setBudgets(nb); setDoc(doc(db, 'users', uid, 'config', 'budgets'), nb).catch(() => {}); } setAddCatOpen(false); toast.show(name + ' category added'); }} />
       <AddExpenseModal open={modal === 'add-expense'} onClose={closeModal} onSave={addExpense} customCats={customCats} onAddCat={() => setAddCatOpen(true)} currSymbol={currSymbol} />
       <EditBudgetsModal open={modal === 'edit-budgets'} onClose={closeModal} budgets={budgets} onSave={saveBudgets} currSymbol={currSymbol} />
       <AddRecurringModal open={modal === 'add-recurring'} onClose={closeModal} onSave={addRecurring} customCats={customCats} onAddCat={() => setAddCatOpen(true)} currSymbol={currSymbol} />

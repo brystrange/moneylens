@@ -1219,6 +1219,141 @@ select.finput option {
   }
 }
 
+/* ── Auth Page ────────────────────────────────────────────────── */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-card {
+  background: var(--surface);
+  border: 2.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 40px 36px 36px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 8px 8px 0 rgba(26, 26, 46, .12);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: var(--accent);
+  border-radius: var(--r) var(--r) 0 0;
+}
+
+.auth-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--red-bg);
+  border: 2px solid var(--red);
+  border-radius: var(--r3);
+  color: var(--red-dk);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  animation: fadein .18s ease both;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0;
+  color: var(--ink3);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--r2);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 2px solid var(--border2);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: 'Nunito', sans-serif;
+  box-shadow: 2px 2px 0 var(--border2);
+  transition: all .15s;
+}
+
+.google-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--border2);
+  border-color: var(--ink);
+}
+
+.google-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+.google-btn:disabled {
+  opacity: .6;
+  pointer-events: none;
+}
+
+.auth-toggle {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink3);
+}
+
+.auth-toggle button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 800;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-toggle button:hover {
+  color: var(--accent2);
+}
+
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 32px 24px 28px;
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: #fff;
