@@ -357,7 +357,7 @@ function Dashboard({ expenses, recurring, goals, budgets, onNav, onAddExpense, f
           ))}
         </div>
         <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ width: '100%', justifyContent: 'center' }} onClick={onAddExpense}>
+          <button className="btn" onClick={onAddExpense}>
             <PlusIcon /> Record New Expense
           </button>
         </div>
@@ -1381,7 +1381,7 @@ export default function App() {
           ))}
           <div className="sspacer" />
           <div className="sfoot">
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4, textAlign: 'center' }}>
               {user.email || 'Signed in'}
             </div>
             <button className="btn btn-sm btn-ghost" onClick={handleSignOut} style={{ width: '100%', justifyContent: 'center', fontSize: 11, padding: '6px 10px', gap: 5 }}>
@@ -1399,7 +1399,7 @@ export default function App() {
               {expenses.length === 0 && recurring.length === 0 && goals.length === 0 && (
                 <div className="card gap page-enter" style={{ borderColor: 'var(--accent)', borderWidth: 2.5 }}>
                   <div className="card-hd" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}>
-                    <span className="card-title" style={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5.5H18l-4.5 3.5 1.7 5.5L10 13.5 4.8 16.5l1.7-5.5L2 7.5h5.5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" fill="rgba(255,255,255,.3)"/></svg> Welcome to MoneyLens!</span>
+                    <span className="card-title" style={{ color: '#fff', fontSize: 16 }}>Hi {(user.displayName || user.email || '').split(/[\s@]/)[0] || 'there'}. Welcome to MoneyLens!</span>
                   </div>
                   <div className="card-body" style={{ padding: '24px 22px' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 16, lineHeight: 1.7 }}>
