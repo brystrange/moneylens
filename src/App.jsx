@@ -1399,7 +1399,7 @@ export default function App() {
               {expenses.length === 0 && recurring.length === 0 && goals.length === 0 && (
                 <div className="card gap page-enter" style={{ borderColor: 'var(--accent)', borderWidth: 2.5 }}>
                   <div className="card-hd" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}>
-                    <span className="card-title" style={{ color: '#fff' }}>👋 Welcome to MoneyLens!</span>
+                    <span className="card-title" style={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5.5H18l-4.5 3.5 1.7 5.5L10 13.5 4.8 16.5l1.7-5.5L2 7.5h5.5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" fill="rgba(255,255,255,.3)"/></svg> Welcome to MoneyLens!</span>
                   </div>
                   <div className="card-body" style={{ padding: '24px 22px' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 16, lineHeight: 1.7 }}>
@@ -1407,14 +1407,14 @@ export default function App() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {[
-                        { step: '1', title: 'Record your first expense', desc: 'Tap the "Add Expense" button in the top bar to log a transaction.', action: () => openModal('add-expense'), btn: 'Add Expense' },
-                        { step: '2', title: 'Set your budget limits', desc: 'Go to Settings to define monthly spending limits per category.', action: () => setPage('settings'), btn: 'Open Settings' },
-                        { step: '3', title: 'Track recurring bills', desc: 'Add bills like rent, subscriptions, and utilities to stay on top of due dates.', action: () => { setPage('recurring'); }, btn: 'View Recurring' },
+                        { step: '1', title: 'Record your first expense', desc: 'Tap the "Add Expense" button in the top bar to log a transaction.', action: () => openModal('add-expense'), btn: 'Add Expense', color: '#3498DB' },
+                        { step: '2', title: 'Set your budget limits', desc: 'Go to Settings to define monthly spending limits per category.', action: () => setPage('settings'), btn: 'Open Settings', color: '#2ECC71' },
+                        { step: '3', title: 'Track recurring bills', desc: 'Add bills like rent, subscriptions, and utilities to stay on top of due dates.', action: () => { setPage('recurring'); }, btn: 'View Recurring', color: '#9B59B6' },
                       ].map(s => (
                         <div key={s.step} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                           <div style={{
                             width: 32, height: 32, borderRadius: 10,
-                            background: 'var(--accent)', color: '#fff',
+                            background: s.color, color: '#fff',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: 14, fontWeight: 900, flexShrink: 0,
                             border: '2px solid var(--ink)', boxShadow: '2px 2px 0 var(--ink)',
@@ -1427,11 +1427,9 @@ export default function App() {
                         </div>
                       ))}
                     </div>
-                    <div style={{ marginTop: 18, fontSize: 11, fontWeight: 600, color: 'var(--ink3)', textAlign: 'center' }}>
-                      This guide will disappear once you add your first transaction.
-                    </div>
                   </div>
                 </div>
+
               )}
               <Dashboard
                 key="dashboard"

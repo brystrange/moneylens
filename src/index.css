@@ -248,7 +248,7 @@ body::before {
   transition: all .15s;
   border: 2px solid transparent;
   white-space: nowrap;
-  margin-bottom: 3px;
+  margin-bottom: 6px;
   background: none;
 }
 
