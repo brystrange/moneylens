@@ -55,7 +55,7 @@ function getCatBg(cat) { return CAT_BG[cat] || getCustomCatColor(cat).bg; }
 // ─────────────────────────────────────────────────────────────
 //  DEFAULT DATA — Firebase is the source of truth
 // ─────────────────────────────────────────────────────────────
-const DEFAULT_BUDGETS = { Food: 4000, Transport: 2000, Shopping: 3000, Bills: 5000, Health: 2500 };
+const DEFAULT_BUDGETS = { Food: 0, Transport: 0, Shopping: 0, Bills: 0, Health: 0 };
 
 // ─────────────────────────────────────────────────────────────
 //  TOAST HOOK
@@ -499,8 +499,10 @@ function Budgets({ expenses, budgets, onEditBudgets, fmt = peso }) {
         <div className="card-body">
           {CATS.map((cat, idx) => {
             const spent = cats[cat] || 0, lim = budgets[cat] || 0;
-            const pct = Math.min(100, Math.round((spent / lim) * 100));
-            const over = spent > lim, warn = pct > 75 && !over;
+            const noLimit = lim === 0;
+            const pct = noLimit ? 0 : Math.min(100, Math.round((spent / lim) * 100));
+            const over = !noLimit && spent > lim, warn = !noLimit && pct > 75 && !over;
+            const isEmpty = spent === 0 && noLimit;
             const isLast = idx === CATS.length - 1;
             return (
               <div key={cat} style={{ padding: '18px 0', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
@@ -515,13 +517,13 @@ function Budgets({ expenses, budgets, onEditBudgets, fmt = peso }) {
                     {fmt(spent)}<span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink2)' }}> / {fmt(lim)}</span>
                   </span>
                 </div>
-                <div className="pbar">
-                  <div className={`pbar-fill${over ? ' over' : warn ? ' warn' : ''}`} style={{ width: `${pct}%` }} />
+                <div className="pbar" style={isEmpty ? { opacity: 0.35 } : undefined}>
+                  <div className={`pbar-fill${over ? ' over' : warn ? ' warn' : ''}${isEmpty ? ' empty' : ''}`} style={{ width: isEmpty ? '100%' : `${pct}%`, background: isEmpty ? 'var(--border)' : undefined }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)' }}>{pct}% used</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: over ? 'var(--red)' : 'var(--ink2)' }}>
-                    {over ? `${fmt(spent - lim)} over` : `${fmt(lim - spent)} remaining`}
+                    {noLimit ? 'No limit set' : over ? `${fmt(spent - lim)} over` : `${fmt(lim - spent)} remaining`}
                   </span>
                 </div>
               </div>
@@ -556,14 +558,14 @@ function Recurring({ recurring, onToggle, onDelete, onAdd, fmt = peso }) {
           <div className="hval">{fmt(total)}</div>
           <div className="hsub">{active.length} active subscriptions</div>
         </div>
-        <div className="hero-card" style={{ background: 'var(--ink)' }}>
-          <div className="hlabel" style={{ color: 'rgba(255,255,255,.55)' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: soon.length ? '#fc5c65' : 'rgba(255,255,255,.55)' }}>
+        <div className="hero-card" style={{ background: soon.length ? '#E74C3C' : 'var(--ink)', borderColor: soon.length ? '#c0392b' : 'var(--ink)', transition: 'background .3s' }}>
+          <div className="hlabel" style={{ color: 'rgba(255,255,255,.65)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#fff' }}>
               <AlertIcon size={11} /><span>Due Within 7 Days</span>
             </span>
           </div>
-          <div className="hval" style={{ color: soon.length ? '#fc5c65' : '#fff' }}>{soon.length}</div>
-          <div className="hsub" style={{ color: soon.length ? 'rgba(252,92,101,.7)' : 'rgba(255,255,255,.45)' }}>{soon.length ? soon.map(r => r.name).join(', ') : 'No upcoming bills'}</div>
+          <div className="hval" style={{ color: '#fff' }}>{soon.length}</div>
+          <div className="hsub" style={{ color: 'rgba(255,255,255,.7)' }}>{soon.length ? soon.map(r => r.name).join(', ') : 'No upcoming bills'}</div>
         </div>
         <div className="hero-card" style={{ background: 'var(--ink)' }}>
           <div className="hlabel">Largest Bill</div>
@@ -1392,16 +1394,56 @@ export default function App() {
         {/* MAIN CONTENT */}
         <main className="main">
           {page === 'dashboard' && (
-            <Dashboard
-              key="dashboard"
-              expenses={expenses}
-              recurring={recurring}
-              goals={goals}
-              budgets={budgets}
-              onNav={setPage}
-              onAddExpense={() => openModal('add-expense')}
-              fmt={fmt}
-            />
+            <>
+              {/* First-use tutorial — shown when user has no data yet */}
+              {expenses.length === 0 && recurring.length === 0 && goals.length === 0 && (
+                <div className="card gap page-enter" style={{ borderColor: 'var(--accent)', borderWidth: 2.5 }}>
+                  <div className="card-hd" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                    <span className="card-title" style={{ color: '#fff' }}>👋 Welcome to MoneyLens!</span>
+                  </div>
+                  <div className="card-body" style={{ padding: '24px 22px' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 16, lineHeight: 1.7 }}>
+                      Get started in 3 easy steps:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {[
+                        { step: '1', title: 'Record your first expense', desc: 'Tap the "Add Expense" button in the top bar to log a transaction.', action: () => openModal('add-expense'), btn: 'Add Expense' },
+                        { step: '2', title: 'Set your budget limits', desc: 'Go to Settings to define monthly spending limits per category.', action: () => setPage('settings'), btn: 'Open Settings' },
+                        { step: '3', title: 'Track recurring bills', desc: 'Add bills like rent, subscriptions, and utilities to stay on top of due dates.', action: () => { setPage('recurring'); }, btn: 'View Recurring' },
+                      ].map(s => (
+                        <div key={s.step} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 10,
+                            background: 'var(--accent)', color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 14, fontWeight: 900, flexShrink: 0,
+                            border: '2px solid var(--ink)', boxShadow: '2px 2px 0 var(--ink)',
+                          }}>{s.step}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink)', marginBottom: 3 }}>{s.title}</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink3)', lineHeight: 1.6, marginBottom: 8 }}>{s.desc}</div>
+                            <button className="btn btn-sm btn-accent" onClick={s.action}>{s.btn}</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 18, fontSize: 11, fontWeight: 600, color: 'var(--ink3)', textAlign: 'center' }}>
+                      This guide will disappear once you add your first transaction.
+                    </div>
+                  </div>
+                </div>
+              )}
+              <Dashboard
+                key="dashboard"
+                expenses={expenses}
+                recurring={recurring}
+                goals={goals}
+                budgets={budgets}
+                onNav={setPage}
+                onAddExpense={() => openModal('add-expense')}
+                fmt={fmt}
+              />
+            </>
           )}
           {page === 'expenses' && (
             <Expenses key="expenses" expenses={expenses} onDelete={confirmDeleteExpense} fmt={fmt} />
