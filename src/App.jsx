@@ -243,11 +243,31 @@ function Field({ label, children }) {
 
 
 // ─────────────────────────────────────────────────────────────
+//  SPINNER — used inside modal buttons while saving
+// ─────────────────────────────────────────────────────────────
+function Spinner({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ animation: 'spin .65s linear infinite', flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
+      <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  CONFIRM DELETE MODAL
 // ─────────────────────────────────────────────────────────────
 function ConfirmDelete({ open, itemName, onConfirm, onCancel }) {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (!open) setBusy(false); }, [open]);
+
+  const handleConfirm = async () => {
+    setBusy(true);
+    try { await onConfirm(); } finally { setBusy(false); }
+  };
+
   return (
-    <Modal open={open} title="Delete Item" onClose={onCancel}>
+    <Modal open={open} title="Delete Item" onClose={busy ? undefined : onCancel}>
       <div style={{ textAlign: 'center', padding: '8px 0 20px' }}>
         <div style={{
           width: 56, height: 56, borderRadius: '50%',
@@ -265,15 +285,16 @@ function ConfirmDelete({ open, itemName, onConfirm, onCancel }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={onCancel}>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={onCancel} disabled={busy}>
           Cancel
         </button>
         <button
           className="btn"
-          style={{ flex: 1, justifyContent: 'center', background: 'var(--red)', color: '#fff', borderColor: 'var(--red)', boxShadow: '3px 3px 0 var(--red-dk)' }}
-          onClick={onConfirm}
+          style={{ flex: 1, justifyContent: 'center', background: 'var(--red)', color: '#fff', borderColor: 'var(--red)', boxShadow: busy ? 'none' : '3px 3px 0 var(--red-dk)', opacity: busy ? 0.7 : 1 }}
+          onClick={handleConfirm}
+          disabled={busy}
         >
-          Yes, Delete
+          {busy ? <><Spinner size={13} /> Deleting…</> : 'Yes, Delete'}
         </button>
       </div>
     </Modal>
@@ -746,7 +767,7 @@ function Insights({ expenses, budgets, goals, fmt = peso }) {
           <div className="card-body" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {safe.map(c => (
               <span key={c} className="cat-pill" style={{ background: 'var(--green-bg)', borderColor: 'var(--green)', color: 'var(--green)' }}>
-                <CatIcon name={c} size={16} />&nbsp;{c} {Math.round(((cats[c] || 0) / budgets[c]) * 100)}%
+                <CatIcon name={c} size={16} />&nbsp;{c} {budgets[c] > 0 ? Math.round(((cats[c] || 0) / budgets[c]) * 100) : 0}%
               </span>
             ))}
           </div>
@@ -808,8 +829,10 @@ function Settings({ budgets, onSaveBudgets, customCats, onAddCustomCat, currency
 
   const handleAddCat = () => {
     if (!newCat.trim()) return;
-    onAddCustomCat(newCat.trim(), parseFloat(newLim) || 0);
-    setForm(p => ({ ...p, [newCat.trim()]: parseFloat(newLim) || 0 }));
+    const updatedForm = { ...form, [newCat.trim()]: parseFloat(newLim) || 0 };
+    setForm(updatedForm);
+    onAddCustomCat(newCat.trim());
+    onSaveBudgets(updatedForm);
     setNewCat(''); setNewLim('');
   };
 
@@ -825,7 +848,7 @@ function Settings({ budgets, onSaveBudgets, customCats, onAddCustomCat, currency
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink3)' }}>Manage your budget limits and preferences</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,540px) minmax(0,280px)', gap: 18, alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         {/* LEFT — Budget limits */}
         <div className="card">
@@ -854,9 +877,10 @@ function Settings({ budgets, onSaveBudgets, customCats, onAddCustomCat, currency
                     <input
                       className="finput"
                       type="number" min="0"
-                      style={{ paddingLeft: 24 }}
-                      value={form[cat] ?? ''}
-                      onChange={e => setForm(p => ({ ...p, [cat]: parseFloat(e.target.value) || 0 }))}
+                      style={{ paddingLeft: 24, MozAppearance: 'textfield' }}
+                      value={form[cat] || ''}
+                      placeholder="0"
+                      onChange={e => setForm(p => ({ ...p, [cat]: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 }))}
                     />
                   </div>
                   {/* Delete — custom only */}
@@ -881,9 +905,9 @@ function Settings({ budgets, onSaveBudgets, customCats, onAddCustomCat, currency
             {/* Add custom category inline */}
             <div style={{ marginTop: 16, padding: '14px', background: 'var(--surface2)', borderRadius: 'var(--r2)', border: '2px dashed var(--border2)' }}>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.8px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: 10 }}>Add Custom Category</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: 8, alignItems: 'center' }}>
-                <input className="finput" placeholder="Category name..." value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCat()} />
-                <div style={{ position: 'relative' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <input className="finput" placeholder="Category name..." style={{ flex: '1 1 140px', minWidth: 0 }} value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCat()} />
+                <div style={{ position: 'relative', flex: '0 0 120px' }}>
                   <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 13, fontWeight: 700, color: 'var(--ink3)', pointerEvents: 'none' }}>{selectedCur.symbol}</span>
                   <input className="finput" type="number" min="0" placeholder="Limit" style={{ paddingLeft: 24 }} value={newLim} onChange={e => setNewLim(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCat()} />
                 </div>
@@ -899,17 +923,14 @@ function Settings({ budgets, onSaveBudgets, customCats, onAddCustomCat, currency
           </div>
         </div>
 
-        {/* RIGHT column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Bottom row — Currency + App Info side by side */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
           {/* Currency */}
           <div className="card">
             <div className="card-hd"><span className="card-title">Currency</span></div>
             <div className="card-body" style={{ padding: '12px 20px 16px' }}>
-              <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--accent)', textAlign: 'center', marginBottom: 12 }}>
-                {selectedCur.symbol}
-              </div>
-              <div style={{ position: 'relative', marginBottom: 12 }}>
+              <div style={{ position: 'relative', marginBottom: 8 }}>
                 <select
                   className="finput"
                   value={currency}
@@ -924,7 +945,7 @@ function Settings({ budgets, onSaveBudgets, customCats, onAddCustomCat, currency
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </div>
               </div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink3)', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink3)' }}>
                 Affects all displayed amounts
               </div>
             </div>
@@ -1077,10 +1098,10 @@ function LoginPage({ onAuth }) {
         {/* Google */}
         <button className="google-btn" onClick={handleGoogle} disabled={busy} type="button">
           <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.34 2.44 10.50l8.09-5.91z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+            <path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.34 2.44 10.50l8.09-5.91z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
           </svg>
           Continue with Google
         </button>
@@ -1341,7 +1362,7 @@ export default function App() {
               <PlusIcon /> <span className="hide-sm">Add Expense</span>
             </button>
             <button className="btn btn-sm btn-ghost" onClick={handleSignOut} title="Sign Out" style={{ gap: 5 }}>
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M7 17H4a1 1 0 01-1-1V4a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 14l4-4-4-4M8 10h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M7 17H4a1 1 0 01-1-1V4a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 14l4-4-4-4M8 10h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
               <span className="hide-sm">Sign Out</span>
             </button>
           </div>
@@ -1385,7 +1406,7 @@ export default function App() {
               {user.email || 'Signed in'}
             </div>
             <button className="btn btn-sm btn-ghost" onClick={handleSignOut} style={{ width: '100%', justifyContent: 'center', fontSize: 11, padding: '6px 10px', gap: 5 }}>
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M7 17H4a1 1 0 01-1-1V4a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 14l4-4-4-4M8 10h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M7 17H4a1 1 0 01-1-1V4a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 14l4-4-4-4M8 10h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Sign Out
             </button>
           </div>
@@ -1473,7 +1494,7 @@ export default function App() {
             <Insights key="insights" expenses={expenses} budgets={budgets} goals={goals} fmt={fmt} />
           )}
           {page === 'settings' && (
-            <Settings key="settings" budgets={budgets} onSaveBudgets={saveBudgets} customCats={customCats} currency={currency} onCurrencyChange={(code) => { setCurrency(code); localStorage.setItem('ml_currency', code); }} fmt={fmt} onAddCustomCat={(name, limit) => { if (name.startsWith('__delete__')) { const cat = name.replace('__delete__', ''); setCustomCats(p => p.filter(c => c !== cat)); const nb = { ...budgets }; delete nb[cat]; saveBudgets(nb); toast.show(cat + ' category removed'); } else { setCustomCats(p => [...p, name]); if (limit > 0) saveBudgets({ ...budgets, [name]: limit }); toast.show(name + ' category added'); } }} />
+            <Settings key="settings" budgets={budgets} onSaveBudgets={saveBudgets} customCats={customCats} currency={currency} onCurrencyChange={(code) => { setCurrency(code); localStorage.setItem('ml_currency', code); }} fmt={fmt} onAddCustomCat={(name) => { if (name.startsWith('__delete__')) { const cat = name.replace('__delete__', ''); setCustomCats(p => p.filter(c => c !== cat)); const nb = { ...budgets }; delete nb[cat]; saveBudgets(nb); toast.show(cat + ' category removed'); } else { setCustomCats(p => [...p, name]); toast.show(name + ' category added'); } }} />
           )}
         </main>
       </div>
@@ -1483,15 +1504,15 @@ export default function App() {
         open={!!confirmDel}
         itemName={confirmDel?.name}
         onCancel={() => setConfirmDel(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!confirmDel) return;
-          if (confirmDel.type === 'expense') deleteExpense(confirmDel.id);
-          if (confirmDel.type === 'recurring') deleteRecurring(confirmDel.id);
-          if (confirmDel.type === 'goal') deleteGoal(confirmDel.id);
+          if (confirmDel.type === 'expense') await deleteExpense(confirmDel.id);
+          if (confirmDel.type === 'recurring') await deleteRecurring(confirmDel.id);
+          if (confirmDel.type === 'goal') await deleteGoal(confirmDel.id);
           setConfirmDel(null);
         }}
       />
-      <AddCategoryModal open={addCatOpen} onClose={() => setAddCatOpen(false)} currSymbol={currSymbol} onSave={(name, limit) => { setCustomCats(p => [...p, name]); if (limit > 0) { const nb = { ...budgets, [name]: limit }; setBudgets(nb); setDoc(doc(db, 'users', uid, 'config', 'budgets'), nb).catch(() => {}); } setAddCatOpen(false); toast.show(name + ' category added'); }} />
+      <AddCategoryModal open={addCatOpen} onClose={() => setAddCatOpen(false)} currSymbol={currSymbol} onSave={async (name, limit) => { setCustomCats(p => [...p, name]); if (limit > 0) { const nb = { ...budgets, [name]: limit }; setBudgets(nb); try { await setDoc(doc(db, 'users', uid, 'config', 'budgets'), nb); } catch { } } setAddCatOpen(false); toast.show(name + ' category added'); }} />
       <AddExpenseModal open={modal === 'add-expense'} onClose={closeModal} onSave={addExpense} customCats={customCats} onAddCat={() => setAddCatOpen(true)} currSymbol={currSymbol} />
       <EditBudgetsModal open={modal === 'edit-budgets'} onClose={closeModal} budgets={budgets} onSave={saveBudgets} currSymbol={currSymbol} />
       <AddRecurringModal open={modal === 'add-recurring'} onClose={closeModal} onSave={addRecurring} customCats={customCats} onAddCat={() => setAddCatOpen(true)} currSymbol={currSymbol} />
@@ -1538,13 +1559,18 @@ function CategorySelect({ value, onChange, customCats, onAddCat }) {
 function AddCategoryModal({ open, onClose, onSave, currSymbol = "₱" }) {
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
-  const save = () => {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (!open) setBusy(false); }, [open]);
+
+  const save = async () => {
     if (!name.trim()) return;
-    onSave(name.trim(), parseFloat(limit) || 0);
-    setName(''); setLimit('');
+    setBusy(true);
+    try { await onSave(name.trim(), parseFloat(limit) || 0); setName(''); setLimit(''); }
+    finally { setBusy(false); }
   };
+
   return (
-    <Modal open={open} title="New Category" onClose={onClose} overlayClass="on-top">
+    <Modal open={open} title="New Category" onClose={busy ? undefined : onClose} overlayClass="on-top">
       <Field label="Category Name">
         <input
           className="finput"
@@ -1552,6 +1578,7 @@ function AddCategoryModal({ open, onClose, onSave, currSymbol = "₱" }) {
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && save()}
+          disabled={busy}
         />
       </Field>
       <Field label={`Monthly Budget Limit (${currSymbol})`}>
@@ -1565,12 +1592,15 @@ function AddCategoryModal({ open, onClose, onSave, currSymbol = "₱" }) {
             style={{ paddingLeft: 26 }}
             value={limit}
             onChange={e => setLimit(e.target.value)}
+            disabled={busy}
           />
         </div>
       </Field>
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center' }} onClick={save}>Add Category</button>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center', opacity: busy ? 0.75 : 1, boxShadow: busy ? 'none' : undefined }} onClick={save} disabled={busy}>
+          {busy ? <><Spinner size={13} /> Saving…</> : 'Add Category'}
+        </button>
       </div>
     </Modal>
   );
@@ -1581,36 +1611,43 @@ function AddCategoryModal({ open, onClose, onSave, currSymbol = "₱" }) {
 // ─────────────────────────────────────────────────────────────
 function AddExpenseModal({ open, onClose, onSave, customCats, onAddCat, currSymbol = "₱" }) {
   const [form, setForm] = useState({ name: '', amount: '', date: new Date().toISOString().slice(0, 10), cat: 'Food', note: '' });
+  const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  useEffect(() => { if (!open) setBusy(false); }, [open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.amount || !form.date) return;
-    onSave({ name: form.name.trim(), amount: parseFloat(form.amount), date: form.date, cat: form.cat, note: form.note.trim() });
-    setForm({ name: '', amount: '', date: new Date().toISOString().slice(0, 10), cat: 'Food', note: '' });
+    setBusy(true);
+    try {
+      await onSave({ name: form.name.trim(), amount: parseFloat(form.amount), date: form.date, cat: form.cat, note: form.note.trim() });
+      setForm({ name: '', amount: '', date: new Date().toISOString().slice(0, 10), cat: 'Food', note: '' });
+    } finally { setBusy(false); }
   };
 
   return (
-    <Modal open={open} title="Record Expense" onClose={onClose}>
+    <Modal open={open} title="Record Expense" onClose={busy ? undefined : onClose}>
       <Field label="Description">
-        <input className="finput" placeholder="e.g. Jollibee lunch" value={form.name} onChange={e => set('name', e.target.value)} />
+        <input className="finput" placeholder="e.g. Jollibee lunch" value={form.name} onChange={e => set('name', e.target.value)} disabled={busy} />
       </Field>
       <div className="g2">
         <Field label={`Amount (${currSymbol})`}>
-          <input className="finput" type="number" placeholder="0" min="1" value={form.amount} onChange={e => set('amount', e.target.value)} />
+          <input className="finput" type="number" placeholder="0" min="1" value={form.amount} onChange={e => set('amount', e.target.value)} disabled={busy} />
         </Field>
         <Field label="Date">
-          <input className="finput" type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+          <input className="finput" type="date" value={form.date} onChange={e => set('date', e.target.value)} disabled={busy} />
         </Field>
       </div>
       <Field label="Category">
         <CategorySelect value={form.cat} onChange={v => set('cat', v)} customCats={customCats} onAddCat={onAddCat} />
       </Field>
       <Field label="Note (optional)">
-        <input className="finput" placeholder="Optional" value={form.note} onChange={e => set('note', e.target.value)} />
+        <input className="finput" placeholder="Optional" value={form.note} onChange={e => set('note', e.target.value)} disabled={busy} />
       </Field>
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSave}>Record</button>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center', opacity: busy ? 0.75 : 1, boxShadow: busy ? 'none' : undefined }} onClick={handleSave} disabled={busy}>
+          {busy ? <><Spinner size={13} /> Saving…</> : 'Record'}
+        </button>
       </div>
     </Modal>
   );
@@ -1621,18 +1658,27 @@ function AddExpenseModal({ open, onClose, onSave, customCats, onAddCat, currSymb
 // ─────────────────────────────────────────────────────────────
 function EditBudgetsModal({ open, onClose, budgets, onSave, currSymbol = "₱" }) {
   const [form, setForm] = useState({ ...budgets });
+  const [busy, setBusy] = useState(false);
   useEffect(() => { setForm({ ...budgets }); }, [budgets, open]);
+  useEffect(() => { if (!open) setBusy(false); }, [open]);
+
+  const handleSave = async () => {
+    setBusy(true);
+    try { await onSave(form); } finally { setBusy(false); }
+  };
 
   return (
-    <Modal open={open} title="Edit Budget Limits" onClose={onClose}>
+    <Modal open={open} title="Edit Budget Limits" onClose={busy ? undefined : onClose}>
       {CATS.map(c => (
         <Field key={c} label={c}>
-          <input className="finput" type="number" min="0" value={form[c] || 0} onChange={e => setForm(p => ({ ...p, [c]: parseFloat(e.target.value) || 0 }))} />
+          <input className="finput" type="number" min="0" value={form[c] || 0} onChange={e => setForm(p => ({ ...p, [c]: parseFloat(e.target.value) || 0 }))} disabled={busy} />
         </Field>
       ))}
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center' }} onClick={() => onSave(form)}>Save Changes</button>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center', opacity: busy ? 0.75 : 1, boxShadow: busy ? 'none' : undefined }} onClick={handleSave} disabled={busy}>
+          {busy ? <><Spinner size={13} /> Saving…</> : 'Save Changes'}
+        </button>
       </div>
     </Modal>
   );
@@ -1643,25 +1689,30 @@ function EditBudgetsModal({ open, onClose, budgets, onSave, currSymbol = "₱" }
 // ─────────────────────────────────────────────────────────────
 function AddRecurringModal({ open, onClose, onSave, customCats, onAddCat, currSymbol = "₱" }) {
   const [form, setForm] = useState({ name: '', amount: '', day: '1', cat: 'Bills', due: '' });
+  const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  useEffect(() => { if (!open) setBusy(false); }, [open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.amount) return;
-    onSave({ name: form.name.trim(), amount: parseFloat(form.amount), day: parseInt(form.day) || 1, cat: form.cat, due: form.due });
-    setForm({ name: '', amount: '', day: '1', cat: 'Bills', due: '' });
+    setBusy(true);
+    try {
+      await onSave({ name: form.name.trim(), amount: parseFloat(form.amount), day: parseInt(form.day) || 1, cat: form.cat, due: form.due });
+      setForm({ name: '', amount: '', day: '1', cat: 'Bills', due: '' });
+    } finally { setBusy(false); }
   };
 
   return (
-    <Modal open={open} title="Add Recurring Bill" onClose={onClose}>
+    <Modal open={open} title="Add Recurring Bill" onClose={busy ? undefined : onClose}>
       <Field label="Name">
-        <input className="finput" placeholder="e.g. Spotify Premium" value={form.name} onChange={e => set('name', e.target.value)} />
+        <input className="finput" placeholder="e.g. Spotify Premium" value={form.name} onChange={e => set('name', e.target.value)} disabled={busy} />
       </Field>
       <div className="g2">
         <Field label={`Amount (${currSymbol})`}>
-          <input className="finput" type="number" placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} />
+          <input className="finput" type="number" placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} disabled={busy} />
         </Field>
         <Field label="Billing Day">
-          <input className="finput" type="number" min="1" max="31" value={form.day} onChange={e => set('day', e.target.value)} />
+          <input className="finput" type="number" min="1" max="31" value={form.day} onChange={e => set('day', e.target.value)} disabled={busy} />
         </Field>
       </div>
       <div className="g2">
@@ -1669,12 +1720,14 @@ function AddRecurringModal({ open, onClose, onSave, customCats, onAddCat, currSy
           <CategorySelect value={form.cat} onChange={v => set('cat', v)} customCats={customCats} onAddCat={onAddCat} />
         </Field>
         <Field label="Next Due Date">
-          <input className="finput" type="date" value={form.due} onChange={e => set('due', e.target.value)} />
+          <input className="finput" type="date" value={form.due} onChange={e => set('due', e.target.value)} disabled={busy} />
         </Field>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSave}>Add</button>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center', opacity: busy ? 0.75 : 1, boxShadow: busy ? 'none' : undefined }} onClick={handleSave} disabled={busy}>
+          {busy ? <><Spinner size={13} /> Saving…</> : 'Add'}
+        </button>
       </div>
     </Modal>
   );
@@ -1685,33 +1738,40 @@ function AddRecurringModal({ open, onClose, onSave, customCats, onAddCat, currSy
 // ─────────────────────────────────────────────────────────────
 function AddGoalModal({ open, onClose, onSave, currSymbol = "₱" }) {
   const [form, setForm] = useState({ name: '', target: '', saved: '0', deadline: '2025-12' });
+  const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  useEffect(() => { if (!open) setBusy(false); }, [open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.target) return;
-    onSave({ name: form.name.trim(), target: parseFloat(form.target), saved: parseFloat(form.saved) || 0, deadline: form.deadline });
-    setForm({ name: '', target: '', saved: '0', deadline: '2025-12' });
+    setBusy(true);
+    try {
+      await onSave({ name: form.name.trim(), target: parseFloat(form.target), saved: parseFloat(form.saved) || 0, deadline: form.deadline });
+      setForm({ name: '', target: '', saved: '0', deadline: '2025-12' });
+    } finally { setBusy(false); }
   };
 
   return (
-    <Modal open={open} title="New Savings Goal" onClose={onClose}>
+    <Modal open={open} title="New Savings Goal" onClose={busy ? undefined : onClose}>
       <Field label="Goal Name">
-        <input className="finput" placeholder="e.g. Emergency Fund" value={form.name} onChange={e => set('name', e.target.value)} />
+        <input className="finput" placeholder="e.g. Emergency Fund" value={form.name} onChange={e => set('name', e.target.value)} disabled={busy} />
       </Field>
       <div className="g2">
         <Field label={`Target (${currSymbol})`}>
-          <input className="finput" type="number" placeholder="50000" value={form.target} onChange={e => set('target', e.target.value)} />
+          <input className="finput" type="number" placeholder="50000" value={form.target} onChange={e => set('target', e.target.value)} disabled={busy} />
         </Field>
         <Field label="Deadline">
-          <input className="finput" type="month" value={form.deadline} onChange={e => set('deadline', e.target.value)} />
+          <input className="finput" type="month" value={form.deadline} onChange={e => set('deadline', e.target.value)} disabled={busy} />
         </Field>
       </div>
       <Field label={`Already Saved (${currSymbol})`}>
-        <input className="finput" type="number" placeholder="0" value={form.saved} onChange={e => set('saved', e.target.value)} />
+        <input className="finput" type="number" placeholder="0" value={form.saved} onChange={e => set('saved', e.target.value)} disabled={busy} />
       </Field>
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSave}>Create</button>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center', opacity: busy ? 0.75 : 1, boxShadow: busy ? 'none' : undefined }} onClick={handleSave} disabled={busy}>
+          {busy ? <><Spinner size={13} /> Saving…</> : 'Create'}
+        </button>
       </div>
     </Modal>
   );
@@ -1722,16 +1782,18 @@ function AddGoalModal({ open, onClose, onSave, currSymbol = "₱" }) {
 // ─────────────────────────────────────────────────────────────
 function ContributeModal({ open, onClose, goal, onSave, fmt = peso, currSymbol = "₱" }) {
   const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (!open) { setAmount(''); setBusy(false); } }, [open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return;
-    onSave(goal.id, amt);
-    setAmount('');
+    setBusy(true);
+    try { await onSave(goal.id, amt); } finally { setBusy(false); }
   };
 
   return (
-    <Modal open={open} title="Contribute to Goal" onClose={onClose}>
+    <Modal open={open} title="Contribute to Goal" onClose={busy ? undefined : onClose}>
       {goal && (
         <div style={{ background: 'var(--accent)', borderRadius: 'var(--r)', border: '2.5px solid var(--ink)', padding: '18px 20px', marginBottom: 20, boxShadow: '3px 3px 0 var(--ink)' }}>
           <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{goal.name}</div>
@@ -1741,11 +1803,13 @@ function ContributeModal({ open, onClose, goal, onSave, fmt = peso, currSymbol =
         </div>
       )}
       <Field label={`Amount to Contribute (${currSymbol})`}>
-        <input className="finput" type="number" placeholder="0" min="1" value={amount} onChange={e => setAmount(e.target.value)} />
+        <input className="finput" type="number" placeholder="0" min="1" value={amount} onChange={e => setAmount(e.target.value)} disabled={busy} />
       </Field>
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSave}>Confirm</button>
+        <button className="btn" style={{ flex: 1, justifyContent: 'center', borderRadius: 'var(--r2)' }} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-accent" style={{ flex: 1, justifyContent: 'center', opacity: busy ? 0.75 : 1, boxShadow: busy ? 'none' : undefined }} onClick={handleSave} disabled={busy}>
+          {busy ? <><Spinner size={13} /> Saving…</> : 'Confirm'}
+        </button>
       </div>
     </Modal>
   );
