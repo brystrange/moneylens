@@ -1,6 +1,6 @@
 // src/utils.jsx
 
-export const CATS = ['Food', 'Transport', 'Shopping', 'Bills', 'Health'];
+export const CATS = [];
 
 export const peso = (n) =>
     '₱' + Math.round(n).toLocaleString('en-PH');
